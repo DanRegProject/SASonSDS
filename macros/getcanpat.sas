@@ -17,7 +17,7 @@
 
   %do N=1 %to &nsets;
       %let code = %lowcase(%scan(&cancerlist,&N));
-	  %if %lowcase(&type) eq cancer %then %do;
+	  %if %lowcase(&type) eq "cancer" %then %do;
       %findingCancer(outdata=work.&code.ALL, outcome=&code, basedata=&basedata,if=&if);
 	  %findCancerStage(outdata=&outlib..CAN&code.ALL, outcome=&code);
 	  proc sort data=&outlib..CAN&code.ALL;

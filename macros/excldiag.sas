@@ -1,8 +1,10 @@
-%macro ExclDiag(lib,base,excl,prefix=D);
+%macro ExclDiag(lib,base,excl,new=,prefix=D);
     %local N nsets diag len;
+    %if "&new"="" %then %let new = &base;
     %if %symexist(LPR&excl) %then %do;
         data &lib..&base.ALL;
             set &lib..&base.ALL;
+	    outcome = "&new";
             %let nsets=%sysfunc(countw(&&LPR&excl));
             %do N=1 %to &nsets;
                 %let diag=%lowcase(%scan(&&LPR&excl,&N));

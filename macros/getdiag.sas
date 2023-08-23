@@ -1,5 +1,5 @@
 %macro getDiag(outlib, diaglist, diagtype=A B ALGA01 ALGA02, pattype=0 1 2 3, kontakttype=ALCA00 ALCA10, insttype=hospital,prioritet=1 2 ATA1 ATA3, 
-               ICD8=FALSE, basedata=, fromyear=1977, basepop=, tildiag=FALSE, UAF=FALSE, SOURCE=LPR LPRPSYK MINIPAS LPR3SB);
+               ICD8=FALSE, basedata=, fromyear=1977, basepop=, tildiag=FALSE, UAF=FALSE, SOURCE=LPR LPRPSYK MINIPAS LPR3SB LPRF);
 	%local N nsets diag nsource s stype;
 	%global RC;
 	%start_timer(getdiag); /* measure time for this macro */
@@ -130,6 +130,13 @@ SOURCE:     basic source of data
 		%let lastyrGH=0;
 		%let tablegrp=LPR3_SB;
 	%end;
+	%if %UPCASE("&SOURCE")="LPRF" %then %do;
+		%let fromyear=0;
+		%let lastyrGH=0;
+		%let tablegrp=LPR_F;
+	%end;
+
+
 	%if &fromyear ne 0 and &lastyrGH ne 0 %then %do;
 		%do %while (%sysfunc(exist(raw.&tablegrp._t_adm&lastyrGH))=0 and &lastyrGH>&fromyear);
 			%let lastyrGH=%eval(&lastyrGH - 1);
@@ -159,6 +166,14 @@ SOURCE:     basic source of data
 			%let returncode0=1;
 		%end;
 	%end;
+
+	%if %UPCASE("&SOURCE")="LPRF" %then %do;
+		%if %sysfunc(exist(raw.&tablegrp._kontakter))=0 and %sysfunc(exist(raw.&tablegrp._diagnoser))=0 %then %do;
+			%put WARNING getDiag: LPR-F data not available.;
+			%let returncode0=1;
+		%end;
+	%end;
+
 	%if &returncode0=0 %then %do;
 		%do yr=&fromyear %to &lastyrGH;
 			proc sql inobs=&sqlmax;
@@ -171,6 +186,11 @@ SOURCE:     basic source of data
 					%let dsn2=  raw.&tablegrp._diagnose;
 					%let dsn3=  raw.&tablegrp._diagnose_tillaeg;
 				%end;
+				%else %if %UPCASE("&SOURCE") eq "LPRF" %then %do;
+					%let dsn1=  raw.&tablegrp._kontakter;
+					%let dsn2=  raw.&tablegrp._diagnoser;
+					%let dsn3=  raw.&tablegrp._organisationer; /* til at finde sorkoder og enheder */
+				%END;
 				%else %do;
 					%if &yr=&lastyrGH and &UAF=TRUE and %UPCASE("&SOURCE") eq "LPR" %then %let dsn1= raw.lpr2_mdl_uaf_t_adm&yr;
 					%else %if &yr<2005 and %UPCASE("&SOURCE")="LPR" %then %let dsn1= raw.lpr_t_adm&yr;
@@ -180,53 +200,85 @@ SOURCE:     basic source of data
 					%else %if &yr<2005 and %UPCASE("&SOURCE") eq "LPR" %then %let dsn2= raw.lpr_t_diag&yr;
 					%else %let dsn2= raw.&tablegrp._t_diag&yr;
 				%end;
-				%if %sysfunc(exist(&dsn2)) and %sysfunc(exist(&dsn2)) %then %do;
+				%if %sysfunc(exist(&dsn1)) and %sysfunc(exist(&dsn2)) %then %do;
 					%if &yr=&fromyear %then create table &localoutdata as;
 					%else insert into &localoutdata ;
 					select distinct
-					%if %upcase("&SOURCE") eq "LPR3SB" %then %do;
-						a.kontakt_id as contact_id,
-						a.personnummer_encrypted as pnr,
-						"&outcome" as outcome length=12,
-						datepart(a.starttidspunkt) as indate format=date.,
-						case a.sluttidspunkt when . then . else datepart(a.sluttidspunkt) end as outdate format=date.,
-						a.starttidspunkt as starttime,
-						a.sluttidspunkt as endtime,
-						"" as pattype length=1 format=$1.  label="pattype",
-						%if &tildiag=TRUE %then c.tillaegskode; %else b.kode; as diagnose length=10 label="diagnose",
-						b.art as diagtype format=$6. length=6 label="diagnosetype",
-						put(a.sundhedsinstitution,20.) as hospital length=20  format=$20. label="hospital",
-						a.inst_type length=30,
-						put(a.ansvarlig_enhed,20.) as hospitalunit length=20  format=$20. label="Ansvarlig enhed",
-						a.hovedspeciale as speciality label="hovedspeciale" length=40,
-						a.kontakttype as contacttype length=6,
-						a.kontaktaarsag as contactcause length=6,
-						a.prioritet as priority length=4 format=$4.,
-						%if &tildiag=FALSE %then
-	   case when a.rec_in<=b.rec_in then b.rec_in
-	        when a.rec_in> b.rec_in then a.rec_in
-		else .
-	   end as rec_in format=date.,
-	   case when a.rec_out<=b.rec_out then a.rec_out
-	        when a.rec_out> b.rec_out then b.rec_out
-		else .
-	   end as rec_out format=date.
-	   ;
-	   %if &tildiag=TRUE %then
-	   case when a.rec_in<=b.rec_in and c.rec_in<= b.rec_in then b.rec_in
-	        when a.rec_in>b.rec_in  and a.rec_in>  c.rec_in then a.rec_in
-	        when a.rec_in<=c.rec_in and b.rec_in<= c.rec_in then c.rec_in
-		else .
-	   end as rec_in format=date.,
-	   case when a.rec_out>=b.rec_out and c.rec_out>= b.rec_out then b.rec_out
-	        when a.rec_out<b.rec_out  and a.rec_out<  c.rec_out then a.rec_out
-	        when a.rec_out>=c.rec_out and b.rec_out>= c.rec_out then c.rec_out
-		else .
-	   end as rec_out format=date.,
-	   ;
-	   /*a.rec_in format=date.,
-						b.rec_out format=date.*/
-					%end;
+						%if %upcase("&SOURCE") eq "LPR3SB" %then %do;
+							a.kontakt_id as contact_id,
+							a.personnummer_encrypted as pnr,
+							"&outcome" as outcome length=12,
+							datepart(a.starttidspunkt) as indate format=date.,
+							case a.sluttidspunkt when . then . else datepart(a.sluttidspunkt) end as outdate format=date.,
+							a.starttidspunkt as starttime,
+							a.sluttidspunkt as endtime,
+							"" as pattype length=1 format=$1.  label="pattype",
+							%if &tildiag=TRUE %then d.tillaegskode; %else b.kode; as diagnose length=10 label="diagnose",
+							b.art as diagtype format=$6. length=6 label="diagnosetype",
+							put(a.sundhedsinstitution,20.) as hospital length=20  format=$20. label="hospital",
+							a.inst_type length=30,
+							put(a.ansvarlig_enhed,20.) as hospitalunit length=20  format=$20. label="Ansvarlig enhed",
+							a.hovedspeciale as speciality label="hovedspeciale" length=40,
+							a.kontakttype as contacttype length=6,
+							a.kontaktaarsag as contactcause length=6,
+							a.prioritet as priority length=4 format=$4.,
+							%if &tildiag=FALSE %then
+								case when a.rec_in<=b.rec_in then b.rec_in
+								when a.rec_in> b.rec_in then a.rec_in
+								else .
+								end as rec_in format=date.,
+								case when a.rec_out<=b.rec_out then a.rec_out
+								when a.rec_out> b.rec_out then b.rec_out
+								else .
+								end as rec_out format=date.
+								;
+							%if &tildiag=TRUE %then
+							case when a.rec_in<=b.rec_in and c.rec_in<= b.rec_in then b.rec_in
+							when a.rec_in>b.rec_in  and a.rec_in>  c.rec_in then a.rec_in
+							when a.rec_in<=c.rec_in and b.rec_in<= c.rec_in then c.rec_in
+							else .
+							end as rec_in format=date.,
+							case when a.rec_out>=b.rec_out and c.rec_out>= b.rec_out then b.rec_out
+							when a.rec_out<b.rec_out  and a.rec_out<  c.rec_out then a.rec_out
+							when a.rec_out>=c.rec_out and b.rec_out>= c.rec_out then c.rec_out
+							else .
+							end as rec_out format=date.,
+							;
+							/*a.rec_in format=date.,
+								b.rec_out format=date.*/
+						%end;
+						%else %if %UPCASE("&SOURCE") eq "LPRF" %then %do;
+							
+							a.DW_EK_KONTAKT as contact_id,
+							a.CPR_ENCRYPTED as pnr,
+							"&outcome" as outcome length=12,
+							a.DATO_START as indate format=date.,
+							a.DATO_SLUT as outdate format=date.,
+							a.TIDSPUNKT_START as starttime,
+							a.TIDSPUNKT_SLUT as endtime,
+							"" as pattype length=1 format=$1.  label="pattype",
+							b.DIAGNOSEKODE as diagnose,
+							b.DIAGNOSETYPE as diagtype format=$6. length=6 label="diagnosetype",
+							d.SUNDHEDSINSTITUTION as hospital label="hospital",
+							d.sorenhed_type as inst_type,
+							a.SORENHED_ANS as hospitalunit length=20  format=$20. label="Ansvarlig enhed",
+							a.HOVEDSPECIALE_ANS as speciality label="hovedspeciale" length=40,
+							a.KONTAKTTYPE as contacttype length=6,
+							a.KONTAKTAARSAG as contactcause length=6,
+							a.PRIORITET as priority length=4 format=$4.,
+							%if &tildiag=FALSE %then
+								case when a.rec_in<=b.rec_in then b.rec_in
+								when a.rec_in> b.rec_in then a.rec_in
+								else .
+								end as rec_in format=date.,
+								case when a.rec_out<=b.rec_out then a.rec_out
+								when a.rec_out> b.rec_out then b.rec_out
+								else .
+								end as rec_out format=date.
+								;
+
+						%end;
+
 					%else %do;
 						0 as contact_id,
 						a.v_cpr_encrypted as pnr label="pnr",
@@ -257,15 +309,18 @@ SOURCE:     basic source of data
 	  					%end;
 					from &dsn1
 					a inner join &dsn2 b on
-					%if %upcase("&SOURCE") ne "LPR3SB" %then (a.k_recnum=b.v_recnum 
-					);
-					%else (a.kontakt_id=b.kontakt_id );
+					%if %upcase("&SOURCE") eq "LPR3SB" %then (a.kontakt_id=b.kontakt_id);
+					%else %if %upcase("&SOURCE") eq "LPRF" %then (a.DW_EK_KONTAKT=b.DW_EK_KONTAKT );
+					%else (  a.k_recnum=b.v_recnum  );
 					%if %upcase("&SOURCE") eq "LPR3SB" and &tildiag=TRUE %then
-					inner join &dsn3 c on (b.diagnose_id=c.diagnose_id );
+						inner join &dsn3 d on (b.diagnose_id=d.diagnose_id );
+					%if %upcase("&SOURCE") eq "LPRF" %then 
+						inner join &dsn3 d on (a.sorenhed_ans = d.sorenhed);
 					%if &basedata ne %then %do; 
 						inner join &basedata c on
-						%if %upcase("&SOURCE") ne "LPR3SB" %then a.v_cpr_encrypted;
-						%else a.personnummer_encrypted; =c.pnr
+						%if %upcase("&SOURCE") eq "LPRF" %then a.CPR_ENCRYPTED=c.pnr;
+						%else %if %upcase("&SOURCE") eq "LPR3SB" %then a.personnummer_encrypted=c.pnr;
+						%else a.v_cpr_encrypted =c.pnr;
 					%end;
 					where
 					%if &dlstcnt > 0 %then %do;
@@ -276,23 +331,29 @@ SOURCE:     basic source of data
 						/* ICD8 er numerisk ICD10 starter altid med et bogstav */
 						%if %sysfunc(anyalpha(&dval),1) ne 0 %then %do;  /* If there is a character in the diagnosis (result from anyalpha ne 0) -> IDC-10 */
 							%if &tildiag=TRUE %then %do; UPCASE(%if %upcase("&source") eq "LPR3SB" %then c.tillaegskode; %else b.c_tildiag;) like "&dval.%" ; %end; 
-							%else %do; UPCASE(%if %upcase("&source") eq "LPR3SB" %then b.kode; %else b.c_diag;) like  "D&dval.%"  %end;
+							%else %do; UPCASE(%if %upcase("&source") eq "LPR3SB" %then b.kode; %else %if %upcase("&SOURCE") eq "LPRF" %then b.DIAGNOSEKODE; %else b.c_diag;) like  "D&dval.%"  %end;
 						%end; /* ICD-10, tillægskode uden D */
 						%else %do;
-							UPCASE(%if %upcase("&source") eq "LPR3SB" %then b.kode; %else b.c_diag;) like  "&dval.%"
+							UPCASE(%if %upcase("&source") eq "LPR3SB" %then b.kode; 
+							%else %if %upcase("&SOURCE") eq "LPRF" %then b.DIAGNOSEKODE;
+							%else b.c_diag;) like  "&dval.%"
 						%end; /* ICD-8 - ingen tillægskoder */
 					%end;
 					 )
 					 %end;
 					/* in order to get at numeric list: */
-					%if %upcase("&source") ne "LPR3SB" %then %do;					
+					%if %upcase("&source") ne "LPR3SB" and %upcase("&source") ne "LPRF" %then %do;					
 						%if &prioritet ne and %varexist(&dsn1,c_indm) %then %do;    and
 						    (a.c_indm eq "" or upcase(a.c_indm) in (%quotelst(&prioritet,delim=%str(, ))))
 						%end;
 					%end;
 					%if &diagtype ne %then %do;    and
-						%if %upcase("&source") eq "LPR3SB" %then upcase(b.art); %else upcase(b.c_diagtype); in (%quotelst(&diagtype,delim=%str(, )))
+						%if %upcase("&source") eq "LPR3SB" %then upcase(b.art); 
+						%else %if %upcase("&SOURCE") eq "LPRF" %then upcase(b.DIAGNOSETYPE);
+						%else upcase(b.c_diagtype); in (%quotelst(&diagtype,delim=%str(, )))
 					%end;
+					%if %UPCASE("&SOURCE") eq "LPRF" and &tildiag == FALSE %then
+						and b.DIAGNOSETYPE ne "+";
 					%if %upcase("&source") eq "LPR3SB" %then %do;
 						%if &kontakttype ne %then %do;    and
 							upcase(a.kontakttype) in (%quotelst(&kontakttype,delim=%str(, )))
@@ -305,7 +366,9 @@ SOURCE:     basic source of data
 						%end;
 					%end;						
 					
-					and %if %upcase("&source") ne "LPR3SB" %THEN a.v_cpr_encrypted; %else a.personnummer_encrypted; ne "";
+					and %if %upcase("&source") eq "LPR3SB" %THEN a.personnummer_encrypted;
+						%else %if %upcase("&source") eq "LPRF" %then a.CPR_ENCRYPTED;
+						%else a.v_cpr_encrypted; ne "";
 				%end;
 			%SqlQuit;
 		%end;
