@@ -1,5 +1,5 @@
 %macro getOpr(outlib, oprlist,fromyear=1997, type=opr, pattype=0 1 2, kontakttype=ALCA00 ALCA10, insttype=hospital,prioritet=ATA1 ATA3,
-              oprart="" "V" "P" "D", basedata=, basepop=, tilopr=FALSE /* tillægsdiagnose */,
+              oprart="" "V" "P" "D", basedata=, basepop=, tilopr=FALSE /* tillÃ¦gsdiagnose */,
               UAF=FALSE /* uafsluttede */, SOURCE=LPR MINIPAS LPR3SB LPR_F);
   %start_timer(getopr); /* measure time for this macro */
 
@@ -77,7 +77,7 @@
   #+NAME          :  %getOpr
   #+TYPE          :  SAS
   #+DESCRIPTION   :  Find records of operations
-  #+OUTPUT        :  output datasætnavn
+  #+OUTPUT        :  output datasÃ¦tnavn
   #+AUTHOR        :  JNK/FLS
   #+CHANGELOG     :  Date        Initials Status
                   :  ??-11-15    JNK      ported from DS, rewritten
@@ -92,8 +92,8 @@
   oprart:     Operationsart, tegn, med mellemrum (D, P, V)
 
   pattype:    patienttyper, ciffer, adskildt med mellemrum (0, 1, 2 og 3)
-  basedata:   input datasæt med identer og skæringsdato
-  fromyear:   startår
+  basedata:   input datasÃ¦t med identer og skÃ¦ringsdato
+  fromyear:   startÃ¥r
 */
 
 %macro findingOpr(outdata, outcome, opr, kontakttype=, insttype=, prioritet=, pattype=, oprart=, basedata=, fromyear=, type=, tilopr=, UAF==, SOURCE=LPR,returnCode=); /*Defined type to be operation per default - can use UBE*/
@@ -104,7 +104,7 @@
   %let insttype    = %upcase(&insttype);
   %let prioritet   = %upcase(&prioritet);
 	
-  %let localoutdata=%NewDatasetName(localoutdatatmp); /* temporært datasætnavn så data i work */
+  %let localoutdata=%NewDatasetName(localoutdatatmp); /* temporÃ¦rt datasÃ¦tnavn sÃ¥ data i work */
   /* log eksekveringstid */
   %put start findingOpr: %qsysfunc(datetime(), datetime20.3);
   %let startOPRtime = %qsysfunc(datetime());
@@ -187,7 +187,7 @@
 	    %end;
 		%else %if  %UPCASE("&SOURCE")="LPR_F" %then %do;
 	
-			/* her skal der rettets når lpr_f procdure tabellerne er samlet i en tabel med opr og en med ube (med kontakter og foløb) 04/08/2023 */
+			/* her skal der rettets nÃ¥r lpr_f procdure tabellerne er samlet i en tabel med opr og en med ube (med kontakter og folÃ¸b) 04/08/2023 */
 	    	%if %upcase(&type)=OPR %then %do;
 				%let dsn1=  raw.&tablegrp._kontakter;
 	     		%let dsn2=  raw.&tablegrp._procedurer_kirurgi_k;
@@ -334,12 +334,12 @@
       %end;
       from
       &dsn1 a inner join %if %upcase("&SOURCE") ne "LPR_F" %then &dsn2 b on;
-	  /* her skal rettes når LPR_F tabeller samples */
+	  /* her skal rettes nÃ¥r LPR_F tabeller samples */
 		%else (select * from &dsn2. union all select * from &dsn3.) b on;
       %if %upcase("&SOURCE") eq "LPR3SB" %then
       (a.kontakt_id=b.kontakt_id );
 	  %else %if %upcase("&SOURCE") eq "LPR_F" %then
-	  /* her skal der rettes når LPR_F tabeller samples */
+	  /* her skal der rettes nÃ¥r LPR_F tabeller samples */
 	  (a.DW_EK_KONTAKT=b.DW_EK_KONTAKT and a.DW_EK_forloeb=.) or (a.DW_EK_KONTAKT=. and a.DW_EK_forloeb=b.DW_EK_forloeb)
       %else 
       (a.k_recnum=b.v_recnum);
@@ -352,9 +352,9 @@
       inner join &basedata c on
 	      %if %upcase("&SOURCE") ne "LPR3SB" and %upcase("&SOURCE") ne "LPR_F" %then a.v_cpr_encrypted;
 	      %else %if %upcase("&SOURCE") eq "LPR3SB" %then a.personnummer_encrypted 
-		  %else %if %upcase("&SOURCE") eq "LPR_F" %then a.CPR_ENCRYPTED=c.pnr; =c.pnr;
+		  %else %if %upcase("&SOURCE") eq "LPR_F" %then a.CPR_ENCRYPTED=c.pnr; =c.pnr
       %end;
-	  where /* mangler at holde styr på tilopr  */
+	  where /* mangler at holde styr pÃ¥ tilopr  */
 	  %if &dlstcnt > 0 %then %do;
 	  (
         %do I=1 %to &dlstcnt;
@@ -388,7 +388,7 @@
 	  %if %upcase("&SOURCE") ne "LPR3SB" and %upcase("&SOURCE") ne "LPR_F" %then a.v_cpr_encrypted; 
 		%else %if %UPCASE("&SOURCE") eq "LPR3SB" %then a.personnummer_encrypted;
 		%else %if %UPCASE("&SOURCE") eq "LPR_F" %then a.CPR_ENCRYPTED; ne "" /* remove empty pnr lines */
-	  /* som i getDiag lad det være styret af uaf datasættet
+	  /* som i getDiag lad det vÃ¦re styret af uaf datasÃ¦ttet
 	  %if &UAF=FALSE %then %do;
 	  and
 	   %if %upcase("&SOURCE") ne "LPR3SB" %then a.d_uddto; %else a.sluttidspunkt; ne .
