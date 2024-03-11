@@ -1,6 +1,6 @@
 %macro getOpr(outlib, oprlist,fromyear=1997, type=opr, pattype=0 1 2, kontakttype=ALCA00 ALCA10, insttype=hospital,prioritet=ATA1 ATA3,
               oprart="" "V" "P" "D", basedata=, basepop=, tilopr=FALSE /* tillægsdiagnose */,
-              UAF=FALSE /* uafsluttede */, SOURCE=LPR MINIPAS LPR3SB LPR_F);
+              UAF=FALSE /* uafsluttede */, SOURCE=LPR MINIPAS LPR3SB LPRF);
   %start_timer(getopr); /* measure time for this macro */
 
   %if %UPCASE(&type)=UBE and &fromyear<1999 %then %let fromyear=1999;
@@ -124,7 +124,7 @@
 		%let oprart=;
 		%let pattcnt=0;
 	%end;
-	%if %UPCASE("&SOURCE")="LPR_F" %then %do;
+	%if %UPCASE("&SOURCE")="LPRF" %then %do;
 		%let fromyear = 0;
 		%let lastyrOPR = 0;
 		%let tablegrp = LPR_F;
@@ -167,7 +167,7 @@
 			%let returncode0=1;
 		%end;
 	%end;
-	%if %UPCASE("&SOURCE")="LPR_F" %then %do;
+	%if %UPCASE("&SOURCE")="LPRF" %then %do;
 		%if %sysfunc(exist(raw.&tablegrp._kontakter))=0 and %sysfunc(exist(raw.&tablegrp._procedurer_kirurgi_k))=0 and %sysfunc(exist(raw.&tablegrp._procedurer_kirurgi_f))=0 %then %do;
 			%put getOPR WARNING: LPR-F data not available.;
 			%let returncode0=1;
@@ -185,9 +185,9 @@
 	      %let dsn2=  raw.&tablegrp._procedurer;
 	      %let dsn3=  raw.&tablegrp._procedurer_tillaeg;
 	    %end;
-		%else %if  %UPCASE("&SOURCE")="LPR_F" %then %do;
+		%else %if  %UPCASE("&SOURCE")="LPRF" %then %do;
 	
-			/* her skal der rettets når lpr_f procdure tabellerne er samlet i en tabel med opr og en med ube (med kontakter og foløb) 04/08/2023 */
+			/* her skal der rettets når LPRF procdure tabellerne er samlet i en tabel med opr og en med ube (med kontakter og foløb) 04/08/2023 */
 	    	%if %upcase(&type)=OPR %then %do;
 				%let dsn1=  raw.&tablegrp._kontakter;
 	     		%let dsn2=  raw.&tablegrp._procedurer_kirurgi_k;
@@ -262,8 +262,8 @@
 	   ;
       %end;
 
-	/* LPR_F start */
-		%if %upcase("&SOURCE") eq "LPR_F" %then %do;
+	/* LPRF start */
+		%if %upcase("&SOURCE") eq "LPRF" %then %do;
 	   a.DW_EK_KONTAKT as contact_id,
 	   a.CPR_ENCRYPTED as pnr,
 	   "&outcome" as outcome length=12,
@@ -298,9 +298,9 @@
 	   ;
 	   
       %end;
-	/* LPR_F "end" */
+	/* LPRF "end" */
 
-      %else %if %upcase("&SOURCE") ne "LPR_F" and %upcase("&SOURCE") ne "LPR3SB" %then %do;
+      %else %if %upcase("&SOURCE") ne "LPRF" and %upcase("&SOURCE") ne "LPR3SB" %then %do;
       	   0 as contact_id, 
            a.v_cpr_encrypted as pnr label="pnr",
 	   "&outcome" as outcome length=12,
@@ -333,26 +333,26 @@
 	   end as rec_out format=date.
       %end;
       from
-      &dsn1 a inner join %if %upcase("&SOURCE") ne "LPR_F" %then &dsn2 b on;
-	  /* her skal rettes når LPR_F tabeller samples */
+      &dsn1 a inner join %if %upcase("&SOURCE") ne "LPRF" %then &dsn2 b on;
+	  /* her skal rettes når LPRF tabeller samples */
 		%else (select * from &dsn2. union all select * from &dsn3.) b on;
       %if %upcase("&SOURCE") eq "LPR3SB" %then
       (a.kontakt_id=b.kontakt_id );
-	  %else %if %upcase("&SOURCE") eq "LPR_F" %then
-	  /* her skal der rettes når LPR_F tabeller samples */
+	  %else %if %upcase("&SOURCE") eq "LPRF" %then
+	  /* her skal der rettes når LPRF tabeller samples */
 	  (a.DW_EK_KONTAKT=b.DW_EK_KONTAKT and a.DW_EK_forloeb=.) or (a.DW_EK_KONTAKT=. and a.DW_EK_forloeb=b.DW_EK_forloeb)
       %else 
       (a.k_recnum=b.v_recnum);
       %if %upcase("&SOURCE") = "LPR3SB" and &tilopr=TRUE %then
       inner join &dsn3 c on
       (b.procedurer_id=c.procedurer_id );
-	  	%if %upcase("&SOURCE") eq "LPR_F" %then 
+	  	%if %upcase("&SOURCE") eq "LPRF" %then 
 		inner join &dsn4 d on (a.sorenhed_ans = d.sorenhed);
       %if &basedata ne %then %do; 
       inner join &basedata c on
-	      %if %upcase("&SOURCE") ne "LPR3SB" and %upcase("&SOURCE") ne "LPR_F" %then a.v_cpr_encrypted;
+	      %if %upcase("&SOURCE") ne "LPR3SB" and %upcase("&SOURCE") ne "LPRF" %then a.v_cpr_encrypted;
 	      %else %if %upcase("&SOURCE") eq "LPR3SB" %then a.personnummer_encrypted 
-		  %else %if %upcase("&SOURCE") eq "LPR_F" %then a.CPR_ENCRYPTED=c.pnr; =c.pnr
+		  %else %if %upcase("&SOURCE") eq "LPRF" %then a.CPR_ENCRYPTED=c.pnr; =c.pnr
       %end;
 	  where /* mangler at holde styr på tilopr  */
 	  %if &dlstcnt > 0 %then %do;
@@ -360,11 +360,11 @@
         %do I=1 %to &dlstcnt;
           %let dval = %upcase(%qscan(&opr,&i));
 	      %if &i>1 %then OR ;
-	          %if %upcase("&SOURCE") ne "LPR3SB" and %upcase("&SOURCE") ne "LPR_F" %then %do;
+	          %if %upcase("&SOURCE") ne "LPR3SB" and %upcase("&SOURCE") ne "LPRF" %then %do;
   		    	%if &tilopr=TRUE %then upcase(b.c_tilopr) ; %else upcase(b.c_opr) ;%end;
 		  	  %if %upcase("&SOURCE") eq "LPR3SB" %then %do;
   		    	%if &tilopr=TRUE %then upcase(c.tillaegskode) ; %else upcase(b.kode) ;%end;
-          	  %if %upcase("&SOURCE") eq "LPR_F" %then %do;
+          	  %if %upcase("&SOURCE") eq "LPRF" %then %do;
 				%if &tilopr = TRUE %then b.PROCEDURETYPE eq "+" and PROCEDUREKODE %else b.PROCEDURETYPE ne "+" and PROCEDUREKODE; %end;
 			like "&dval%nrstr(%%)"
 		  
@@ -385,9 +385,9 @@
 	  %end;
           %if &oprart ne %then and b.c_oprart in (%commas(&oprart));
 	  and
-	  %if %upcase("&SOURCE") ne "LPR3SB" and %upcase("&SOURCE") ne "LPR_F" %then a.v_cpr_encrypted; 
+	  %if %upcase("&SOURCE") ne "LPR3SB" and %upcase("&SOURCE") ne "LPRF" %then a.v_cpr_encrypted; 
 		%else %if %UPCASE("&SOURCE") eq "LPR3SB" %then a.personnummer_encrypted;
-		%else %if %UPCASE("&SOURCE") eq "LPR_F" %then a.CPR_ENCRYPTED; ne "" /* remove empty pnr lines */
+		%else %if %UPCASE("&SOURCE") eq "LPRF" %then a.CPR_ENCRYPTED; ne "" /* remove empty pnr lines */
 	  /* som i getDiag lad det være styret af uaf datasættet
 	  %if &UAF=FALSE %then %do;
 	  and
