@@ -1,4 +1,4 @@
-    /* dan behandlingsperioder ud fra foreningsmÆngden af periode - altsÅ i behandling uanset hvilket lÆgemiddel */
+    /* dan behandlingsperioder ud fra foreningsmÃ†ngden af periode - altsÃ… i behandling uanset hvilket lÃ†gemiddel */
 %macro jointrt(outdata,name,list,postfix,inlib=work,indatalist=);
     %local i val vset vstart vend;
     %let i=1;
@@ -87,7 +87,7 @@ by pnr &indexdate;
 create table &outdata as
 select c.pnr, c.&indexdate, sum(c.days) as &outvar from
 (
-select a.pnr, a.&indexdate,
+select distint a.pnr, a.&indexdate,
 %if &days<0 %then %do;
     (case when &pervar.end>&indexdate then &indexdate else &pervar.end end) -
     (case when &pervar.start<&indexdate+&days then &indexdate+&days else &pervar.start end)
