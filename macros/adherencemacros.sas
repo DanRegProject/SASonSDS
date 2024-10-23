@@ -87,7 +87,7 @@ by pnr &indexdate;
 create table &outdata as
 select c.pnr, c.&indexdate, sum(c.days) as &outvar from
 (
-select distint a.pnr, a.&indexdate,
+select distinct a.pnr, a.&indexdate,
 %if &days<0 %then %do;
     (case when &pervar.end>&indexdate then &indexdate else &pervar.end end) -
     (case when &pervar.start<&indexdate+&days then &indexdate+&days else &pervar.start end)
